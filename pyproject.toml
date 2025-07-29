@@ -1,0 +1,37 @@
+[project]
+name = "spritze"
+version = "0.1.0"
+description = "A Dependency Injection framework for Python."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { file = "LICENSE" }
+authors = [
+  { name="Arseny Seliverstov", email="asel1x@icloud.com" },
+]
+
+[project.urls]
+Homepage = "https://github.com/aSel1x/spritze"
+
+[project.optional-dependencies]
+test = [
+    "pytest",
+    "pytest-asyncio",
+]
+dev = [
+    "ruff",
+    "pip-audit",
+]
+examples = [
+    "uvicorn",
+    "litestar",
+    "flask",
+]
+
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.ruff]
+line-length = 88
+lint.select = ["E", "F", "W", "I"] # E=Error, F=Pyflakes, W=Warning, I=isort
+target-version = "py311"
