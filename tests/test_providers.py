@@ -1,18 +1,18 @@
+from collections.abc import AsyncGenerator, Generator
+
 import pytest
 
-from spritze.core.container import Container
-from spritze.core.entities import Depends
-from spritze.decorators import provide
+from spritze import Container, Depends, init, inject, provider
 
 
 def test_sync_generator_provider():
     class Gen(Container):
-        @provide()
-        def res(self) -> str:
+        @provider()
+        def res(self) -> Generator[str, None, None]:
             yield "ok"
 
     c = Gen()
-    inject = c.injector()
+    init(c)
 
     @inject
     def handler(res: Depends[str]):
@@ -24,12 +24,12 @@ def test_sync_generator_provider():
 @pytest.mark.asyncio
 async def test_async_generator_provider():
     class Gen(Container):
-        @provide()
-        async def res(self) -> str:
+        @provider()
+        async def res(self) -> AsyncGenerator[str, None]:
             yield "async_ok"
 
     c = Gen()
-    inject = c.injector()
+    init(c)
 
     @inject
     async def handler(res: Depends[str]):

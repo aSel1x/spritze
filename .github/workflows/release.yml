@@ -32,7 +32,7 @@ jobs:
       url: https://pypi.org/project/spritze
 
     permissions:
-      id-token: write  # IMPORTANT: mandatory for trusted publishing
+      id-token: write
 
     steps:
       - name: Download all the dists

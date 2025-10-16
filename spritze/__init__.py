@@ -9,4 +9,28 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-__all__ = ["Container", "provide"]
+# Core components
+from .application.decorators import provider, singleton, transient
+from .application.global_container import init, inject
+from .entities.transient import Transient
+from .infrastructure.context import context
+from .repositories.container_repository import Container
+from .value_objects.dependency_marker import DependencyMarker, Depends
+from .value_objects.scope import Scope
+
+__all__ = [
+    # Core
+    "Container",
+    "Scope",
+    "Transient",
+    "Depends",
+    "DependencyMarker",
+    # Decorators
+    "provider",
+    "singleton",
+    "transient",
+    "inject",
+    "init",
+    # Context
+    "context",
+]

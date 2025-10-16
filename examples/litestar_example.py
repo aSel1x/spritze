@@ -1,52 +1,53 @@
+from typing import Annotated
+
 import uvicorn
 from litestar import Litestar, get
 
-from spritze.core.container import Container
-from spritze.core.entities import Depends, Scope
-from spritze.decorators import provide
+from spritze import Container, Depends, Scope, init, inject, provider
 
 
-# 1. Define our services
+# Domain services
 class ReportingService:
-    def __init__(self):
+    def __init__(self) -> None:
         print("ReportingService created (APP scope)")
 
-    async def generate_report(self) -> dict:
+    async def generate_report(self) -> dict[str, str]:
         return {"source": "app", "data": "report_content"}
 
 
 class AuditService:
-    def __init__(self):
+    def __init__(self) -> None:
         print("AuditService created (REQUEST scope)")
 
-    async def log_access(self, user: str):
+    async def log_access(self, user: str) -> None:
         print(f"AUDIT: User '{user}' accessed the report.")
 
 
-# 2. Create a container and define providers in it
+# Container
 class AppContainer(Container):
-    @provide(scope=Scope.APP)
+    @provider(scope=Scope.APP)
     def reporting_service(self) -> ReportingService:
         return ReportingService()
 
-    @provide(scope=Scope.REQUEST)
+    @provider(scope=Scope.REQUEST)
     def audit_service(self) -> AuditService:
         return AuditService()
 
 
-# 3. Initialize the container and get the injector from it
+# Initialize container
 container = AppContainer()
-inject = container.injector()
+init(container)
 
 
-# 4. Create a LiteStar application and use the injector
+# Litestar application
 @get("/")
 @inject
 async def get_report(
-    reporter: Depends[ReportingService], auditor: Depends[AuditService]
-) -> dict:
+    reporter: Annotated[ReportingService, Depends()],
+    auditor: Annotated[AuditService, Depends()],
+) -> dict[str, str]:
     await auditor.log_access(user="test_user")
-    report = await reporter.generate_report()
+    report: dict[str, str] = await reporter.generate_report()
     return report
 
 

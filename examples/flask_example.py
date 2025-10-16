@@ -1,80 +1,85 @@
+from collections.abc import Generator
+from typing import Annotated
+
 from flask import Flask, jsonify
 
-from spritze.core.container import Container
-from spritze.core.entities import Depends, Scope
-from spritze.decorators import provide
+from spritze import Container, Depends, Scope, init, inject, provider
 
 
-# 1. Define our services
+# Domain services
 class Settings:
-    def __init__(self, value: str):
+    def __init__(self, value: str) -> None:
         print(f"Settings created with value: '{value}' (APP scope)")
-        self.value = value
+        self.value: str = value
 
 
 class SyncResource:
-    _id_counter = 0
+    _id_counter: int = 0
 
-    def __init__(self):
-        self.id = SyncResource._id_counter
+    def __init__(self) -> None:
+        self.id: int = SyncResource._id_counter
         SyncResource._id_counter += 1
-        print(f"Resource [{self.id}] aquired.")
+        print(f"Resource [{self.id}] acquired.")
 
     def use(self) -> str:
         return f"using resource {self.id}"
 
-    def close(self):
+    def close(self) -> None:
         print(f"Resource [{self.id}] released.")
 
 
 class MainService:
-    def __init__(self, settings: Settings, resource: SyncResource):
-        self._settings = settings
-        self._resource = resource
+    def __init__(self, settings: Settings, resource: SyncResource) -> None:
+        self._settings: Settings = settings
+        self._resource: SyncResource = resource
         print("MainService created (REQUEST scope)")
 
-    def process(self):
-        res_usage = self._resource.use()
+    @property
+    def settings(self) -> Settings:
+        return self._settings
+
+    def process(self) -> str:
+        res_usage: str = self._resource.use()
         return f"Processed with {self._settings.value} and {res_usage}"
 
 
-# 2. Create a container and define providers in it
+# Container
 class AppContainer(Container):
-    @provide(scope=Scope.APP)
-    def provide_settings(self) -> Settings:
-        # In a real application, this would be reading from .env or a config
+    @provider(scope=Scope.APP)
+    def settings(self) -> Settings:
         return Settings(value="prod_settings")
 
-    @provide(scope=Scope.REQUEST)
-    def provide_resource(self) -> SyncResource:
+    @provider(scope=Scope.REQUEST)
+    def resource(self) -> Generator[SyncResource, None, None]:
         res = SyncResource()
         try:
             yield res
         finally:
             res.close()
 
-    @provide(scope=Scope.REQUEST)
-    def provide_main_service(
-        self, settings: Settings, resource: SyncResource
-    ) -> MainService:
+    @provider(scope=Scope.REQUEST)
+    def main_service(self, settings: Settings, resource: SyncResource) -> MainService:
         return MainService(settings, resource)
 
 
-# 3. Initialize the container and get the injector from it
+# Initialize container
 container = AppContainer()
-inject = container.injector()
+init(container)
 
-# 4. Create a Flask application and use the injector
+# Flask application
 app = Flask(__name__)
 
 
 @app.route("/")
 @inject
-def index(service: Depends[MainService], settings: Depends[Settings]):
+def index(
+    service: Annotated[MainService, Depends()],
+    settings: Annotated[Settings, Depends()],
+):
     # Make sure the APP-scoped dependency is the same
-    print(
-        f"Is settings in service the same as injected? {service._settings is settings}"
-    )
+    # Demonstrate that APP-scoped dependency is the same instance
+    _same = service.settings is settings
+    print(f"Is settings in service the same as injected? {_same}")
     result = service.process()
     return jsonify({"data": result})
 
