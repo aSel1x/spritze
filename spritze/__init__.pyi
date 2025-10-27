@@ -12,18 +12,21 @@ from spritze.infrastructure.context import ContextField as ContextField
 from spritze.repositories.container_repository import Container as Container
 
 __all__ = [
+    # Core
     "Container",
     "Scope",
+    "Transient",
     "Depends",
     "DependencyMarker",
-    "Transient",
-    "ContextField",
+    # Decorators
     "provider",
     "singleton",
     "transient",
-    "init",
     "inject",
+    "init",
+    # Context
     "context",
+    "ContextField",
 ]
 
 P = ParamSpec("P")
@@ -103,17 +106,17 @@ def init(container: Container | Sequence[Container]) -> None:
 
     ...
 
-def inject(func: Callable[P, R]) -> Callable[P, R]:
+def inject(func: Callable[P, R]) -> Callable[..., R]:
     """Decorator for automatic dependency injection.
 
     Injects dependencies based on function parameter type hints.
-    Preserves original function signature for framework introspection.
+    Parameters with Depends() are removed from signature and injected automatically.
 
     Args:
         func: Function to decorate with dependency injection.
 
     Returns:
-        Decorated function with automatic dependency resolution.
+        Decorated function with dependency parameters removed from signature.
     """
 
     ...

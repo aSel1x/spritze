@@ -13,7 +13,7 @@
 from .application.decorators import provider, singleton, transient
 from .application.global_container import init, inject
 from .entities.transient import Transient
-from .infrastructure.context import context
+from .infrastructure.context import ContextField, context
 from .repositories.container_repository import Container
 from .value_objects.dependency_marker import DependencyMarker, Depends
 from .value_objects.scope import Scope
@@ -33,4 +33,5 @@ __all__ = [
     "init",
     # Context
     "context",
+    "ContextField",
 ]

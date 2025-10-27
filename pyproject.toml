@@ -1,6 +1,6 @@
 [project]
 name = "spritze"
-version = "0.2.1"
+version = "0.2.2"
 description = "A modern, type-safe Dependency Injection framework for Python with support for async/await and context managers."
 readme = "README.md"
 requires-python = ">=3.12"
@@ -32,6 +32,9 @@ examples = [
 requires = ["setuptools>=68.0"]
 build-backend = "setuptools.build_meta"
 
+[tool.setuptools.package-data]
+spritze = ["py.typed", "*.pyi", "**/*.pyi"]
+
 [tool.ruff]
 line-length = 88
 lint.select = ["E", "F", "W", "I"] # E=Error, F=Pyflakes, W=Warning, I=isort
@@ -45,7 +48,6 @@ exclude = [
     "**/.venv",
     "**/site-packages",
     "**/__pycache__",
-    "tests",
 ]
 ignore = [
     ".venv",
