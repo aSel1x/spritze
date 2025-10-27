@@ -1,7 +1,8 @@
 from __future__ import annotations
 
+import functools
 import inspect
-from typing import TYPE_CHECKING, ParamSpec, TypeVar, cast
+from typing import TYPE_CHECKING, ParamSpec, TypeVar, cast, get_type_hints
 from weakref import WeakKeyDictionary
 
 if TYPE_CHECKING:
@@ -9,6 +10,7 @@ if TYPE_CHECKING:
 
 from spritze.infrastructure.exceptions import DependencyNotFound, InvalidProvider
 from spritze.repositories.container_repository import Container
+from spritze.services.resolution_service import ResolutionService
 
 P = ParamSpec("P")
 R = TypeVar("R")
@@ -51,7 +53,7 @@ def _get_inner(
     return inner
 
 
-def _try_containers(
+def _try_resolve_sync(
     container_list: Sequence[Container],
     func: Callable[..., object],
     *args: object,
@@ -70,7 +72,7 @@ def _try_containers(
     raise DependencyNotFound(object)
 
 
-async def _try_containers_async(
+async def _try_resolve_async(
     container_list: Sequence[Container],
     func: Callable[..., object],
     *args: object,
@@ -90,28 +92,46 @@ async def _try_containers_async(
     raise DependencyNotFound(object)
 
 
-def _create_wrapper(
+def _normalize_containers(
     containers: Container | Sequence[Container],
-    func: Callable[P, R],
-    sig: inspect.Signature,
-) -> Callable[..., R]:
-    if not isinstance(containers, (list, tuple)):
-        container_list = cast("Sequence[Container]", (containers,))
-    else:
-        container_list = containers
+) -> Sequence[Container]:
+    return (
+        containers
+        if isinstance(containers, (list, tuple))
+        else cast("Sequence[Container]", (containers,))
+    )
+
+
+def inject(func: Callable[P, R]) -> Callable[..., R]:
+    _sig_cache: list[inspect.Signature | None] = [None]
+
+    def _get_new_signature() -> inspect.Signature:
+        if _sig_cache[0] is None:
+            sig = inspect.signature(func)
+            ann_map = get_type_hints(func, include_extras=True)
+            deps = ResolutionService.extract_dependencies_from_signature(sig, ann_map)
+            new_params = [
+                param for name, param in sig.parameters.items() if name not in deps
+            ]
+            _sig_cache[0] = sig.replace(parameters=new_params)
+        return _sig_cache[0]
 
     if inspect.iscoroutinefunction(func):
 
+        @functools.wraps(func)
         async def _awrapper(*args: object, **kwargs: object) -> object:
-            return await _try_containers_async(
+            container_list = _normalize_containers(_get_container())
+            return await _try_resolve_async(
                 container_list, cast("Callable[..., object]", func), *args, **kwargs
             )
 
         wrapper = _awrapper
     else:
 
+        @functools.wraps(func)
         def _swrapper(*args: object, **kwargs: object) -> object:
-            return _try_containers(
+            container_list = _normalize_containers(_get_container())
+            return _try_resolve_sync(
                 container_list, cast("Callable[..., object]", func), *args, **kwargs
             )
 
@@ -119,15 +139,10 @@ def _create_wrapper(
 
     from contextlib import suppress
 
-    with suppress(Exception):
-        setattr(wrapper, "__signature__", sig.replace(parameters=()))
+    with suppress(AttributeError, TypeError):
+        setattr(wrapper, "__signature__", _get_new_signature())
+
     return cast("Callable[..., R]", wrapper)
-
-
-def inject(func: Callable[P, R]) -> Callable[..., R]:
-    sig = inspect.signature(func)
-    containers = _get_container()
-    return _create_wrapper(containers, func, sig)
 
 
 __all__ = ["init", "inject"]

@@ -40,17 +40,26 @@ TypeMap = dict[str, type[object]]
 
 
 class _BoundContext:
+    __slots__: tuple[str, ...] = ("_container", "_declared_cache")
+
     def __init__(self, container: "Container") -> None:
         self._container: Container = container
+        self._declared_cache: TypeMap | None = None
+
+    def _get_declared_types(self) -> TypeMap:
+        if self._declared_cache is None:
+            declared: TypeMap = {}
+            class_attrs: MappingProxyType[str, object] = vars(self._container.__class__)
+            for name, attr in class_attrs.items():
+                if isinstance(attr, ContextField):
+                    cf = cast("ContextField[object]", attr)
+                    declared[name] = cf.ctx_type
+                    declared[cf.ctx_type.__name__] = cf.ctx_type
+            self._declared_cache = declared
+        return self._declared_cache
 
     def update(self, **kwargs: object) -> None:
-        declared: TypeMap = {}
-        class_attrs: MappingProxyType[str, object] = vars(self._container.__class__)
-        for name, attr in class_attrs.items():
-            if isinstance(attr, ContextField):
-                cf = cast("ContextField[object]", attr)
-                declared[name] = cf.ctx_type
-                declared[cf.ctx_type.__name__] = cf.ctx_type
+        declared = self._get_declared_types()
 
         for key, value in kwargs.items():
             t = declared.get(key)
@@ -343,7 +352,7 @@ class Container:
 
                 from contextlib import suppress
 
-                with suppress(Exception):
+                with suppress(AttributeError, TypeError):
                     setattr(_awrapper, "__signature__", sig.replace(parameters=()))
                 return cast("Callable[..., R]", _awrapper)
             else:
@@ -364,7 +373,7 @@ class Container:
 
                 from contextlib import suppress
 
-                with suppress(Exception):
+                with suppress(AttributeError, TypeError):
                     setattr(_swrapper, "__signature__", sig.replace(parameters=()))
                 return cast("Callable[..., R]", _swrapper)
 
