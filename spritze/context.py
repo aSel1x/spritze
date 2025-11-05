@@ -1,4 +1,4 @@
-from typing import Generic, Protocol, TypeVar, cast
+from typing import Generic, Protocol, TypeVar
 
 T = TypeVar("T")
 
@@ -23,7 +23,8 @@ class ContextField(Generic[T]):
         value = instance.get_context_value(self.ctx_type)
         if value is None:
             raise LookupError(f"Context value for {self.ctx_type.__name__} not found")
-        return cast("T", value)
+        assert isinstance(value, self.ctx_type)
+        return value
 
 
 __all__ = ["ContextField"]

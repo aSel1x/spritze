@@ -3,7 +3,7 @@
 Provides type hints for the Spritze dependency injection framework.
 """
 
-from collections.abc import Awaitable, Callable
+from collections.abc import Callable
 from enum import Enum
 from typing import ParamSpec, TypeVar, overload
 
@@ -19,6 +19,7 @@ __all__ = [
     "provider",
     "inject",
     "resolve",
+    "aresolve",
     "init",
     "get_context",
     "ContextField",
@@ -125,17 +126,37 @@ def inject(func: Callable[P, R]) -> Callable[..., R]:
 
     ...
 
-def resolve(dependency_type: type[T]) -> T | Awaitable[T]:
-    """Resolve a dependency by type.
+def resolve(dependency_type: type[T]) -> T:
+    """Resolve a sync dependency by type.
 
-    Returns either the resolved instance (for sync providers) or an awaitable
-    (for async providers) that will resolve to the instance.
+    Use this for synchronous providers only.
+    For async providers, use aresolve().
 
     Args:
         dependency_type: The type of the dependency to resolve.
 
     Returns:
-        Resolved instance or awaitable that resolves to the instance.
+        Resolved instance.
+
+    Raises:
+        DependencyNotFound: If no provider is registered for the type.
+        CyclicDependency: If a circular dependency is detected.
+        AsyncSyncMismatch: If provider is async (use aresolve instead).
+        RuntimeError: If init() has not been called yet.
+    """
+
+    ...
+
+async def aresolve(dependency_type: type[T]) -> T:
+    """Resolve a dependency by type in async context.
+
+    Works with both sync and async providers.
+
+    Args:
+        dependency_type: The type of the dependency to resolve.
+
+    Returns:
+        Resolved instance.
 
     Raises:
         DependencyNotFound: If no provider is registered for the type.

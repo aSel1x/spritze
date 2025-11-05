@@ -53,7 +53,7 @@ class ResolutionService:
             if args:
                 first_arg = args[0]
                 if isinstance(first_arg, type):
-                    return cast("type[object]", first_arg)
+                    return first_arg
                 if get_origin(first_arg) is not None:
                     return cast("type[object]", first_arg)
 

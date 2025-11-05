@@ -1,9 +1,11 @@
-"""Dependency injection API: init, inject, get_context."""
+"""Dependency injection API: init, inject, resolve, aresolve, get_context."""
 
-from collections.abc import Awaitable, Callable
+import inspect
+from collections.abc import Callable
 from typing import ParamSpec, TypeVar
 
 from spritze.core.container import Container
+from spritze.exceptions import AsyncSyncMismatch
 
 P = ParamSpec("P")
 R = TypeVar("R")
@@ -46,9 +48,44 @@ def _get_container() -> Container:
     return container
 
 
-def resolve(dependency_type: type[T]) -> T | Awaitable[T]:
-    """Resolve a dependency by type. Returns instance or awaitable."""
-    return _get_container().resolve(dependency_type)
+def resolve(dependency_type: type[T]) -> T:
+    """Resolve a sync dependency by type.
+
+    Use this for synchronous providers only.
+    For async providers, use aresolve().
+
+    Args:
+        dependency_type: The type of dependency to resolve.
+
+    Returns:
+        Resolved instance.
+
+    Raises:
+        AsyncSyncMismatch: If provider is async (use aresolve instead).
+    """
+    container = _get_container()
+    if container.is_async_provider(dependency_type):
+        raise AsyncSyncMismatch(dependency_type, "sync")
+    result = container.resolve(dependency_type)
+    assert not inspect.isawaitable(result)
+    return result
+
+
+async def aresolve(dependency_type: type[T]) -> T:
+    """Resolve a dependency by type in async context.
+
+    Works with both sync and async providers.
+
+    Args:
+        dependency_type: The type of dependency to resolve.
+
+    Returns:
+        Resolved instance.
+    """
+    result = _get_container().resolve(dependency_type)
+    if inspect.isawaitable(result):
+        return await result
+    return result
 
 
 def inject(func: Callable[P, R]) -> Callable[..., R]:
@@ -77,4 +114,4 @@ def get_context() -> _GlobalContext:
     return _GlobalContext()
 
 
-__all__ = ["init", "inject", "resolve", "get_context"]
+__all__ = ["init", "inject", "resolve", "aresolve", "get_context"]

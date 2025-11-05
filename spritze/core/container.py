@@ -165,6 +165,11 @@ class Container:
                 _ = self._request_scoped_instances.set(request_cache)
             request_cache[dependency_type] = instance
 
+    def is_async_provider(self, dependency_type: type[object]) -> bool:
+        """Check if a provider for the given type is async."""
+        provider = self._providers.get(dependency_type)
+        return provider is not None and provider.is_async
+
     def resolve(self, dependency_type: type[T]) -> T | Awaitable[T]:
         """Resolve a dependency by type. Returns instance or awaitable."""
         cached = self._check_cache(dependency_type)
