@@ -251,9 +251,8 @@ class Container:
 
     def inject(self, func: Callable[P, R]) -> Callable[..., R]:
         """Inject dependencies into function parameters."""
+        new_sig, deps = ResolutionService.create_signature_without_dependencies(func)
         sig = inspect.signature(func)
-        ann_map = get_type_hints(func, include_extras=True)
-        deps = ResolutionService.extract_dependencies_from_signature(sig, ann_map)
         is_async_func = inspect.iscoroutinefunction(func)
 
         def _check_and_inject(
@@ -282,11 +281,6 @@ class Container:
                     bound.arguments[name] = await resolved
                 else:
                     bound.arguments[name] = resolved
-
-        new_params = [
-            param for name, param in sig.parameters.items() if name not in deps
-        ]
-        new_sig = sig.replace(parameters=new_params)
 
         if is_async_func:
 

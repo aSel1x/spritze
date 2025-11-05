@@ -77,5 +77,23 @@ class ResolutionService:
 
         return None
 
+    @staticmethod
+    def create_signature_without_dependencies(
+        func: Callable[..., object],
+    ) -> tuple[inspect.Signature, TypeMap]:
+        """Extract dependencies and create new signature without them.
+
+        Returns:
+            Tuple of (new_signature, dependencies_dict)
+        """
+        sig = inspect.signature(func)
+        ann_map = get_type_hints(func, include_extras=True)
+        deps = ResolutionService.extract_dependencies_from_signature(sig, ann_map)
+        new_params = [
+            param for name, param in sig.parameters.items() if name not in deps
+        ]
+        new_sig = sig.replace(parameters=new_params)
+        return new_sig, deps
+
 
 __all__ = ["ResolutionService"]

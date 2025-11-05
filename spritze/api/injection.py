@@ -2,10 +2,12 @@
 
 import inspect
 from collections.abc import Awaitable, Callable
+from contextlib import suppress
 from functools import wraps
 from typing import ParamSpec, TypeVar, cast
 
 from spritze.core.container import Container
+from spritze.core.resolution import ResolutionService
 from spritze.exceptions import AsyncSyncMismatch
 
 P = ParamSpec("P")
@@ -103,6 +105,8 @@ def inject(func: Callable[P, R]) -> Callable[..., R]:
             _injected = _get_container().inject(func)
         return _injected
 
+    new_sig, _deps = ResolutionService.create_signature_without_dependencies(func)
+
     original_func: Callable[..., object] = func
     while hasattr(original_func, "__wrapped__"):
         wrapped = cast(Callable[..., object], getattr(original_func, "__wrapped__"))
@@ -116,12 +120,16 @@ def inject(func: Callable[P, R]) -> Callable[..., R]:
             result = injected_func(*args, **kwargs)
             return await cast(Awaitable[R], result)
 
+        with suppress(AttributeError, TypeError):
+            setattr(async_wrapper, "__signature__", new_sig)
         return cast(Callable[..., R], async_wrapper)
 
     @wraps(func)
     def wrapper(*args: object, **kwargs: object) -> R:
         return _get_injected()(*args, **kwargs)
 
+    with suppress(AttributeError, TypeError):
+        setattr(wrapper, "__signature__", new_sig)
     return wrapper
 
 
