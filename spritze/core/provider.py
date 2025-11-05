@@ -1,12 +1,7 @@
-from __future__ import annotations
-
 import inspect
+from collections.abc import Callable
 from contextlib import asynccontextmanager, contextmanager
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING
-
-if TYPE_CHECKING:
-    from collections.abc import Callable
 
 from spritze.types import ProviderType, Scope
 

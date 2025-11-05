@@ -3,7 +3,7 @@
 Provides type hints for the Spritze dependency injection framework.
 """
 
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from enum import Enum
 from typing import ParamSpec, TypeVar, overload
 
@@ -18,6 +18,7 @@ __all__ = [
     "DependencyMarker",
     "provider",
     "inject",
+    "resolve",
     "init",
     "get_context",
     "ContextField",
@@ -120,6 +121,26 @@ def inject(func: Callable[P, R]) -> Callable[..., R]:
 
     Returns:
         Decorated function with dependency parameters removed from signature.
+    """
+
+    ...
+
+def resolve(dependency_type: type[T]) -> T | Awaitable[T]:
+    """Resolve a dependency by type.
+
+    Returns either the resolved instance (for sync providers) or an awaitable
+    (for async providers) that will resolve to the instance.
+
+    Args:
+        dependency_type: The type of the dependency to resolve.
+
+    Returns:
+        Resolved instance or awaitable that resolves to the instance.
+
+    Raises:
+        DependencyNotFound: If no provider is registered for the type.
+        CyclicDependency: If a circular dependency is detected.
+        RuntimeError: If init() has not been called yet.
     """
 
     ...

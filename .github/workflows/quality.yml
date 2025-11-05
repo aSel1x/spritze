@@ -36,4 +36,4 @@ jobs:
         run: uv sync --all-extras
 
       - name: Security audit
-        run: uv run pip-audit
+        run: uv run pip-audit --skip-editable

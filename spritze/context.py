@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from typing import Generic, Protocol, TypeVar, cast
 
 T = TypeVar("T")
@@ -19,7 +17,7 @@ class ContextField(Generic[T]):
 
     def __get__(
         self, instance: ContextProvider | None, owner: type[object]
-    ) -> ContextField[T] | T:
+    ) -> "ContextField[T] | T":
         if instance is None:
             return self
         value = instance.get_context_value(self.ctx_type)

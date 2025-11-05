@@ -1,19 +1,13 @@
 """Dependency injection API: init, inject, get_context."""
 
-from __future__ import annotations
-
-import inspect
-from contextlib import suppress
-from typing import TYPE_CHECKING, ParamSpec, TypeVar, get_type_hints
-
-if TYPE_CHECKING:
-    from collections.abc import Callable
+from collections.abc import Awaitable, Callable
+from typing import ParamSpec, TypeVar
 
 from spritze.core.container import Container
-from spritze.core.resolution import ResolutionService
 
 P = ParamSpec("P")
 R = TypeVar("R")
+T = TypeVar("T")
 
 _default_container: Container | None = None
 
@@ -52,27 +46,14 @@ def _get_container() -> Container:
     return container
 
 
+def resolve(dependency_type: type[T]) -> T | Awaitable[T]:
+    """Resolve a dependency by type. Returns instance or awaitable."""
+    return _get_container().resolve(dependency_type)
+
+
 def inject(func: Callable[P, R]) -> Callable[..., R]:
-    _sig_cache: list[inspect.Signature | None] = [None]
-
-    def _get_new_signature() -> inspect.Signature:
-        if _sig_cache[0] is None:
-            sig = inspect.signature(func)
-            ann_map = get_type_hints(func, include_extras=True)
-            deps = ResolutionService.extract_dependencies_from_signature(sig, ann_map)
-            new_params = [
-                param for name, param in sig.parameters.items() if name not in deps
-            ]
-            _sig_cache[0] = sig.replace(parameters=new_params)
-        return _sig_cache[0]
-
-    container = _get_container()
-    wrapper = container.injector()(func)
-
-    with suppress(AttributeError, TypeError):
-        setattr(wrapper, "__signature__", _get_new_signature())
-
-    return wrapper
+    """Inject dependencies into function parameters."""
+    return _get_container().inject(func)
 
 
 class _GlobalContext:
@@ -96,4 +77,4 @@ def get_context() -> _GlobalContext:
     return _GlobalContext()
 
 
-__all__ = ["init", "inject", "get_context"]
+__all__ = ["init", "inject", "resolve", "get_context"]

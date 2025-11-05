@@ -10,7 +10,7 @@
 # limitations under the License.
 
 from spritze.api.decorators import provider
-from spritze.api.injection import get_context, init, inject
+from spritze.api.injection import get_context, init, inject, resolve
 from spritze.context import ContextField
 from spritze.core.container import Container
 from spritze.types import DependencyMarker, Depends, Scope
@@ -22,6 +22,7 @@ __all__ = [
     "DependencyMarker",
     "provider",
     "inject",
+    "resolve",
     "init",
     "get_context",
     "ContextField",

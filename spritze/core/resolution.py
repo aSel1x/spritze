@@ -1,12 +1,8 @@
-from __future__ import annotations
-
-from typing import TYPE_CHECKING, TypeVar, cast, get_args, get_type_hints
+import inspect
+from collections.abc import Callable
+from typing import TypeVar, cast, get_args, get_origin, get_type_hints
 
 from spritze.types import DependencyMarker, Depends
-
-if TYPE_CHECKING:
-    import inspect
-    from collections.abc import Callable
 
 T = TypeVar("T")
 TypeMap = dict[str, type[object]]
@@ -46,14 +42,20 @@ class ResolutionService:
             dm_def = cast("DependencyMarker[object]", param.default)
             if isinstance(ann_obj, type):
                 return ann_obj
+            if get_origin(ann_obj) is not None:
+                return cast("type[object]", ann_obj)
             if isinstance(dm_def.dependency_type, type):
                 return dm_def.dependency_type
             return None
 
         if getattr(ann_obj, "__origin__", None) is Depends:
             args = cast("tuple[object, ...]", get_args(ann_obj))
-            if args and isinstance(args[0], type):
-                return cast("type[object]", args[0])
+            if args:
+                first_arg = args[0]
+                if isinstance(first_arg, type):
+                    return cast("type[object]", first_arg)
+                if get_origin(first_arg) is not None:
+                    return cast("type[object]", first_arg)
 
         args_tuple = cast("tuple[object, ...]", get_args(ann_obj))
         if args_tuple and len(args_tuple) >= 2:
@@ -70,6 +72,8 @@ class ResolutionService:
                     return dm.dependency_type
                 if isinstance(base, type):
                     return base
+                if get_origin(base) is not None:
+                    return cast("type[object]", base)
 
         return None
 

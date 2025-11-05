@@ -1,6 +1,3 @@
-from __future__ import annotations
-
-
 class SpritzeError(Exception):
     pass
 
@@ -9,8 +6,10 @@ class DependencyNotFound(SpritzeError):
     dependency_type: type[object]
 
     def __init__(self, dependency_type: type[object]) -> None:
-        msg = f"Dependency '{dependency_type.__name__}' not found. Ensure it's registered as a provider."
-        super().__init__(msg)
+        super().__init__(
+            f"Dependency '{dependency_type.__name__}' not found. "
+            + "Ensure it's registered as a provider."
+        )
         self.dependency_type = dependency_type
 
 
@@ -30,8 +29,10 @@ class CyclicDependency(SpritzeError):
 
 class AsyncSyncMismatch(SpritzeError):
     def __init__(self, dependency_type: type[object], context: str) -> None:
-        msg = f"Cannot resolve async provider '{dependency_type.__name__}' in {context} context."
-        super().__init__(msg)
+        super().__init__(
+            "Cannot resolve async provider "
+            + f"'{dependency_type.__name__}' in {context} context."
+        )
 
 
 __all__ = [

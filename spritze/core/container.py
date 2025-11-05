@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import inspect
 from collections.abc import AsyncGenerator, Awaitable, Callable, Generator
 from contextlib import (
@@ -42,6 +40,9 @@ class Container:
         self._context_values: dict[type[object], object] = {}
         self._resolution_stack: ContextVar[tuple[type[object], ...]] = ContextVar(
             "spritze_resolution_stack", default=()
+        )
+        self._async_mode: ContextVar[bool] = ContextVar(
+            "spritze_async_mode", default=False
         )
 
         self._register_providers()
@@ -90,14 +91,17 @@ class Container:
             return cast("type[object]", ret_obj)
 
         origin_obj = get_origin(ret_obj)
-        origin_name = getattr(origin_obj, "__qualname__", "")
-        if origin_name in (
-            Generator.__qualname__,
-            AsyncGenerator.__qualname__,
-        ):
-            args = get_args(ret_obj)
-            if args and isinstance(args[0], type):
-                return cast("type[object]", args[0])
+        if origin_obj is not None:
+            if isinstance(origin_obj, type) and hasattr(origin_obj, "__qualname__"):
+                origin_name: str = origin_obj.__qualname__
+                if origin_name in (
+                    Generator.__qualname__,
+                    AsyncGenerator.__qualname__,
+                ):
+                    args = get_args(ret_obj)
+                    if args and isinstance(args[0], type):
+                        return cast("type[object]", args[0])
+            return cast("type[object]", ret_obj)
 
         return None
 
@@ -161,174 +165,168 @@ class Container:
                 _ = self._request_scoped_instances.set(request_cache)
             request_cache[dependency_type] = instance
 
-    def _resolve_provider_dependencies_sync(
-        self, provider: Provider
-    ) -> dict[str, object]:
-        kwargs: dict[str, object] = {}
-        deps = ResolutionService.get_deps_to_resolve(provider.func)
-        for name, dep_t in deps.items():
-            kwargs[name] = self.resolve(dep_t)
-        return kwargs
+    def resolve(self, dependency_type: type[T]) -> T | Awaitable[T]:
+        """Resolve a dependency by type. Returns instance or awaitable."""
+        cached = self._check_cache(dependency_type)
+        if cached is not None:
+            return cached
 
-    async def _resolve_provider_dependencies_async(
-        self, provider: Provider
-    ) -> dict[str, object]:
-        kwargs: dict[str, object] = {}
-        deps = ResolutionService.get_deps_to_resolve(provider.func)
-        for name, dep_t in deps.items():
-            kwargs[name] = await self.resolve_async(dep_t)
-        return kwargs
+        stack = self._resolution_stack.get()
+        if dependency_type in stack:
+            raise CyclicDependency(stack + (dependency_type,))
 
-    def _execute_provider(
-        self, provider: Provider, kwargs: dict[str, object]
-    ) -> object:
-        if provider.is_context_manager:
-            cm_raw = provider.func(**kwargs)
-            cm = cast("AbstractContextManager[object]", cm_raw)
-            return self._sync_exit_stack.get().enter_context(cm)
-        else:
-            return provider.func(**kwargs)
+        token_r = self._resolution_stack.set(stack + (dependency_type,))
 
-    async def _execute_provider_async(
-        self, provider: Provider, kwargs: dict[str, object]
-    ) -> object:
-        if provider.is_context_manager:
-            exit_stack = self._async_exit_stack.get()
-            if provider.provider_type == ProviderType.ASYNC_GEN:
-                acm_raw = provider.func(**kwargs)
-                acm = cast("AbstractAsyncContextManager[object]", acm_raw)
-                return await exit_stack.enter_async_context(acm)
-            else:
+        try:
+            provider = self._providers.get(dependency_type)
+            if provider is None:
+                raise DependencyNotFound(dependency_type)
+
+            async def _resolve_deps_async() -> dict[str, object]:
+                kwargs: dict[str, object] = {}
+                deps = ResolutionService.get_deps_to_resolve(provider.func)
+                for name, dep_t in deps.items():
+                    resolved = self.resolve(dep_t)
+                    if inspect.isawaitable(resolved):
+                        kwargs[name] = await resolved
+                    else:
+                        kwargs[name] = resolved
+                return kwargs
+
+            async def _execute_async() -> T:
+                kwargs = await _resolve_deps_async()
+
+                if provider.is_context_manager:
+                    is_async_gen = (
+                        provider.is_async
+                        and provider.provider_type == ProviderType.ASYNC_GEN
+                    )
+                    if is_async_gen:
+                        exit_stack = self._async_exit_stack.get()
+                        acm_raw = provider.func(**kwargs)
+                        acm = cast(AbstractAsyncContextManager[object], acm_raw)
+                        instance_obj = await exit_stack.enter_async_context(acm)
+                    else:
+                        exit_stack_sync = self._sync_exit_stack.get()
+                        cm_raw = provider.func(**kwargs)
+                        cm = cast(AbstractContextManager[object], cm_raw)
+                        instance_obj = exit_stack_sync.enter_context(cm)
+                elif provider.provider_type == ProviderType.ASYNC:
+                    coro = cast("Callable[..., Awaitable[object]]", provider.func)
+                    instance_obj = await coro(**kwargs)
+                else:
+                    instance_obj = provider.func(**kwargs)
+
+                self._cache_instance(dependency_type, instance_obj, provider.scope)
+                return cast(T, instance_obj)
+
+            if provider.is_async or self._async_mode.get():
+                return _execute_async()
+
+            kwargs: dict[str, object] = {}
+            deps = ResolutionService.get_deps_to_resolve(provider.func)
+            for name, dep_t in deps.items():
+                kwargs[name] = self.resolve(dep_t)
+
+            if provider.is_context_manager:
                 cm_raw = provider.func(**kwargs)
-                cm = cast("AbstractContextManager[object]", cm_raw)
-                return exit_stack.enter_context(cm)
-        elif provider.provider_type == ProviderType.ASYNC:
-            coro = cast("Callable[..., Awaitable[object]]", provider.func)
-            return await coro(**kwargs)
-        else:
-            return provider.func(**kwargs)
-
-    def _resolve_with_cycle_check_sync(self, dependency_type: type[T]) -> T:
-        cached = self._check_cache(dependency_type)
-        if cached is not None:
-            return cached
-
-        stack = self._resolution_stack.get()
-        if dependency_type in stack:
-            raise CyclicDependency(stack + (dependency_type,))
-
-        token_r = self._resolution_stack.set(stack + (dependency_type,))
-        try:
-            provider = self._providers.get(dependency_type)
-            if provider is None:
-                raise DependencyNotFound(dependency_type)
-
-            if provider.is_async:
-                raise InvalidProvider(
-                    "Cannot resolve async provider for "
-                    + f"{dependency_type.__name__} in sync context"
-                )
-
-            kwargs = self._resolve_provider_dependencies_sync(provider)
-            instance_obj = self._execute_provider(provider, kwargs)
-
-            self._cache_instance(dependency_type, instance_obj, provider.scope)
-            return cast("T", instance_obj)
-        finally:
-            self._resolution_stack.reset(token_r)
-
-    async def _resolve_with_cycle_check_async(self, dependency_type: type[T]) -> T:
-        cached = self._check_cache(dependency_type)
-        if cached is not None:
-            return cached
-
-        stack = self._resolution_stack.get()
-        if dependency_type in stack:
-            raise CyclicDependency(stack + (dependency_type,))
-
-        token_r = self._resolution_stack.set(stack + (dependency_type,))
-        try:
-            provider = self._providers.get(dependency_type)
-            if provider is None:
-                raise DependencyNotFound(dependency_type)
-
-            kwargs = await self._resolve_provider_dependencies_async(provider)
-            instance_obj = await self._execute_provider_async(provider, kwargs)
-
-            self._cache_instance(dependency_type, instance_obj, provider.scope)
-            return cast("T", instance_obj)
-        finally:
-            self._resolution_stack.reset(token_r)
-
-    def resolve(self, dependency_type: type[T]) -> T:
-        return self._resolve_with_cycle_check_sync(dependency_type)
-
-    async def resolve_async(self, dependency_type: type[T]) -> T:
-        return await self._resolve_with_cycle_check_async(dependency_type)
-
-    def injector(self) -> Callable[[Callable[P, R]], Callable[..., R]]:
-        def decorator(func: Callable[P, R]) -> Callable[..., R]:
-            sig = inspect.signature(func)
-            ann_map = get_type_hints(func, include_extras=True)
-            deps = ResolutionService.extract_dependencies_from_signature(sig, ann_map)
-
-            def _inject_dependencies_sync(bound: inspect.BoundArguments) -> None:
-                for name, t in deps.items():
-                    needs_inject = name not in bound.arguments or isinstance(
-                        bound.arguments.get(name), DependencyMarker
-                    )
-                    if needs_inject:
-                        bound.arguments[name] = self.resolve(t)
-
-            async def _inject_dependencies_async(bound: inspect.BoundArguments) -> None:
-                for name, t in deps.items():
-                    needs_inject = name not in bound.arguments or isinstance(
-                        bound.arguments.get(name), DependencyMarker
-                    )
-                    if needs_inject:
-                        bound.arguments[name] = await self.resolve_async(t)
-
-            if inspect.iscoroutinefunction(func):
-
-                @wraps(func)
-                async def _awrapper(*args: object, **kwargs: object) -> object:
-                    async with AsyncExitStack() as stack:
-                        token_s = self._async_exit_stack.set(stack)
-                        token_c = self._request_scoped_instances.set({})
-                        try:
-                            bound = sig.bind_partial(*args, **kwargs)
-                            await _inject_dependencies_async(bound)
-                            coro = cast("Callable[..., Awaitable[object]]", func)
-                            result: object = await coro(**bound.arguments)
-                            return result
-                        finally:
-                            self._async_exit_stack.reset(token_s)
-                            self._request_scoped_instances.reset(token_c)
-
-                with suppress(AttributeError, TypeError):
-                    setattr(_awrapper, "__signature__", sig.replace(parameters=()))
-                return cast("Callable[..., R]", _awrapper)
+                cm = cast(AbstractContextManager[object], cm_raw)
+                instance_obj = self._sync_exit_stack.get().enter_context(cm)
             else:
+                instance_obj = provider.func(**kwargs)
 
-                @wraps(func)
-                def _swrapper(*args: object, **kwargs: object) -> object:
-                    with ExitStack() as stack:
-                        token_s = self._sync_exit_stack.set(stack)
-                        token_c = self._request_scoped_instances.set({})
-                        try:
-                            bound = sig.bind_partial(*args, **kwargs)
-                            _inject_dependencies_sync(bound)
-                            f_callable = cast("Callable[..., object]", func)
-                            return f_callable(**bound.arguments)
-                        finally:
-                            self._sync_exit_stack.reset(token_s)
-                            self._request_scoped_instances.reset(token_c)
+            self._cache_instance(dependency_type, instance_obj, provider.scope)
+            return cast(T, instance_obj)
 
-                with suppress(AttributeError, TypeError):
-                    setattr(_swrapper, "__signature__", sig.replace(parameters=()))
-                return cast("Callable[..., R]", _swrapper)
+        finally:
+            self._resolution_stack.reset(token_r)
 
-        return cast("Callable[[Callable[P, R]], Callable[..., R]]", decorator)
+    def inject(self, func: Callable[P, R]) -> Callable[..., R]:
+        """Inject dependencies into function parameters."""
+        sig = inspect.signature(func)
+        ann_map = get_type_hints(func, include_extras=True)
+        deps = ResolutionService.extract_dependencies_from_signature(sig, ann_map)
+        is_async_func = inspect.iscoroutinefunction(func)
+
+        def _check_and_inject(
+            bound: inspect.BoundArguments, resolved: object, name: str
+        ) -> None:
+            """Helper to inject resolved dependency into bound arguments."""
+            if inspect.isawaitable(resolved):
+                if inspect.iscoroutine(resolved):
+                    resolved.close()
+                raise InvalidProvider(
+                    f"Cannot inject async dependency into sync function {func.__name__}"
+                )
+            bound.arguments[name] = resolved
+
+        async def _inject_async(bound: inspect.BoundArguments) -> None:
+            """Inject dependencies asynchronously."""
+            for name, dep_type in deps.items():
+                needs_inject = name not in bound.arguments or isinstance(
+                    bound.arguments.get(name), DependencyMarker
+                )
+                if not needs_inject:
+                    continue
+
+                resolved = self.resolve(dep_type)
+                if inspect.isawaitable(resolved):
+                    bound.arguments[name] = await resolved
+                else:
+                    bound.arguments[name] = resolved
+
+        new_params = [
+            param for name, param in sig.parameters.items() if name not in deps
+        ]
+        new_sig = sig.replace(parameters=new_params)
+
+        if is_async_func:
+
+            @wraps(func)
+            async def _awrapper(*args: object, **kwargs: object) -> object:
+                async with AsyncExitStack() as stack:
+                    token_s = self._async_exit_stack.set(stack)
+                    token_c = self._request_scoped_instances.set({})
+                    token_a = self._async_mode.set(True)
+                    try:
+                        bound = sig.bind_partial(*args, **kwargs)
+                        await _inject_async(bound)
+                        coro = cast("Callable[..., Awaitable[object]]", func)
+                        result: object = await coro(**bound.arguments)
+                        return result
+                    finally:
+                        self._async_exit_stack.reset(token_s)
+                        self._request_scoped_instances.reset(token_c)
+                        self._async_mode.reset(token_a)
+
+            with suppress(AttributeError, TypeError):
+                setattr(_awrapper, "__signature__", new_sig)
+            return cast("Callable[..., R]", _awrapper)
+        else:
+
+            @wraps(func)
+            def _swrapper(*args: object, **kwargs: object) -> object:
+                with ExitStack() as stack:
+                    token_s = self._sync_exit_stack.set(stack)
+                    token_c = self._request_scoped_instances.set({})
+                    try:
+                        bound = sig.bind_partial(*args, **kwargs)
+                        for name, dep_type in deps.items():
+                            needs_inject = name not in bound.arguments or isinstance(
+                                bound.arguments.get(name), DependencyMarker
+                            )
+                            if needs_inject:
+                                resolved = self.resolve(dep_type)
+                                _check_and_inject(bound, resolved, name)
+                        f_callable = cast("Callable[..., object]", func)
+                        return f_callable(**bound.arguments)
+                    finally:
+                        self._sync_exit_stack.reset(token_s)
+                        self._request_scoped_instances.reset(token_c)
+
+            with suppress(AttributeError, TypeError):
+                setattr(_swrapper, "__signature__", new_sig)
+            return cast("Callable[..., R]", _swrapper)
 
 
 __all__ = ["Container", "Scope", "Provider"]
