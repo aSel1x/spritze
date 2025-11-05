@@ -1,8 +1,9 @@
 """Dependency injection API: init, inject, resolve, aresolve, get_context."""
 
 import inspect
-from collections.abc import Callable
-from typing import ParamSpec, TypeVar
+from collections.abc import Awaitable, Callable
+from functools import wraps
+from typing import ParamSpec, TypeVar, cast
 
 from spritze.core.container import Container
 from spritze.exceptions import AsyncSyncMismatch
@@ -89,8 +90,35 @@ async def aresolve(dependency_type: type[T]) -> T:
 
 
 def inject(func: Callable[P, R]) -> Callable[..., R]:
-    """Inject dependencies into function parameters."""
-    return _get_container().inject(func)
+    """Inject dependencies into function parameters.
+
+    Container resolution is deferred until first function call,
+    allowing @inject to be used at import time.
+    """
+    _injected: Callable[..., R] | None = None
+
+    def _get_injected() -> Callable[..., R]:
+        nonlocal _injected
+        if _injected is None:
+            _injected = _get_container().inject(func)
+        return _injected
+
+    if inspect.iscoroutinefunction(func):
+
+        @wraps(func)
+        async def _async_wrapper(*args: object, **kwargs: object) -> R:
+            injected = _get_injected()
+            result = injected(*args, **kwargs)
+            return await cast(Awaitable[R], result)
+
+        return cast(Callable[..., R], _async_wrapper)
+    else:
+
+        @wraps(func)
+        def _sync_wrapper(*args: object, **kwargs: object) -> R:
+            return _get_injected()(*args, **kwargs)
+
+        return _sync_wrapper
 
 
 class _GlobalContext:
