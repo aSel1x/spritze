@@ -35,5 +35,8 @@ jobs:
       - name: Install dependencies
         run: uv sync --all-extras
 
+      - name: Upgrade pip
+        run: uv pip install --upgrade pip
+
       - name: Security audit
         run: uv run pip-audit --skip-editable
