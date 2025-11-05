@@ -28,11 +28,4 @@ class ContextField(Generic[T]):
         return cast("T", value)
 
 
-class _ContextAccessor:
-    def get(self, t: type[T]) -> ContextField[T]:
-        return ContextField(t)
-
-
-context = _ContextAccessor()
-
-__all__ = ["ContextField", "context"]
+__all__ = ["ContextField"]

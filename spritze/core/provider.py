@@ -8,9 +8,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-    from ..value_objects.scope import Scope
-
-from ..value_objects.provider_type import ProviderType
+from spritze.types import ProviderType, Scope
 
 
 def _determine_provider_type(

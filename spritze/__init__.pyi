@@ -3,29 +3,23 @@
 Provides type hints for the Spritze dependency injection framework.
 """
 
-from collections.abc import Callable, Sequence
+from collections.abc import Callable
 from enum import Enum
 from typing import ParamSpec, TypeVar, overload
 
-from spritze.entities.transient import Transient as Transient
-from spritze.infrastructure.context import ContextField as ContextField
-from spritze.repositories.container_repository import Container as Container
+from spritze.api.provider_descriptor import ProviderDescriptor as ProviderDescriptor
+from spritze.context import ContextField as ContextField
+from spritze.core.container import Container as Container
 
 __all__ = [
-    # Core
     "Container",
     "Scope",
-    "Transient",
     "Depends",
     "DependencyMarker",
-    # Decorators
     "provider",
-    "singleton",
-    "transient",
     "inject",
     "init",
-    # Context
-    "context",
+    "get_context",
     "ContextField",
 ]
 
@@ -59,12 +53,17 @@ class Depends:
     def __class_getitem__(cls, item: type[T]) -> type[T]: ...
     def __init__(self, dependency_type: type[T] | None = None) -> None: ...
 
-class _ContextAccessor:
-    """Context accessor for creating context fields."""
+class _GlobalContext:
+    """Global context accessor for setting context values."""
 
-    def get(self, t: type[T]) -> ContextField[T]: ...
+    def set(self, **kwargs: object) -> None:
+        """Set context values using keyword arguments.
 
-context: _ContextAccessor
+        Example:
+            ctx = get_context()
+            ctx.set(Config=config, DatabaseURL=db_url)
+        """
+        ...
 
 @overload
 def provider(
@@ -75,33 +74,37 @@ def provider(
     *,
     scope: Scope | str = ...,
 ) -> Callable[[Callable[P, R]], Callable[P, R]]: ...
-def singleton(func: Callable[P, R]) -> Callable[P, R]:
-    """Shorthand for @provider(scope=Scope.APP).
-
-    Creates an application-scoped (singleton) provider.
-    """
-    ...
-
-def transient(target: type[T]) -> Transient:
-    """Register a class as a transient (per-request) dependency.
-
-    Unlike @provider, this works as a class attribute descriptor that
-    automatically registers the class constructor as a provider.
-
-    Example:
-        class AppContainer(Container):
-            user_service = transient(UserService)
-    """
-    ...
-
-def init(container: Container | Sequence[Container]) -> None:
+@overload
+def provider(
+    target: type[T],
+    *,
+    provides: type[object] | None = None,
+    scope: Scope | str = ...,
+) -> ProviderDescriptor: ...
+def init(
+    *containers: Container,
+    context: dict[type[object], object] | None = None,
+) -> None:
     """Initialize the global dependency injection container.
 
     Args:
-        container: A single Container instance or sequence of containers.
+        *containers: One or more Container instances to merge.
+        context: Optional initial context values as {Type: value} mapping.
 
     Raises:
-        ValueError: If container sequence is empty.
+        ValueError: If no containers are provided.
+    """
+
+    ...
+
+def get_context() -> _GlobalContext:
+    """Get the global context accessor.
+
+    Returns:
+        Global context accessor for setting context values.
+
+    Raises:
+        RuntimeError: If init() has not been called yet.
     """
 
     ...

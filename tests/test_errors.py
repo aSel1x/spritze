@@ -1,12 +1,7 @@
 import pytest
 
-from spritze import provider
-from spritze.infrastructure.exceptions import (
-    CyclicDependency,
-    DependencyNotFound,
-    InvalidProvider,
-)
-from spritze.repositories.container_repository import Container
+from spritze import Container, provider
+from spritze.exceptions import CyclicDependency, DependencyNotFound, InvalidProvider
 
 
 class A:

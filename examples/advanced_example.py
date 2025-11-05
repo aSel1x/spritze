@@ -7,15 +7,14 @@ from typing import Annotated
 
 from spritze import (
     Container,
+    ContextField,
     Depends,
     Scope,
-    context,
+    get_context,
     init,
     inject,
     provider,
-    transient,
 )
-from spritze.infrastructure.context import ContextField
 
 
 # Domain entities
@@ -138,7 +137,7 @@ class AsyncUserService:
 # Container with all features
 class AdvancedContainer(Container):
     # Context fields
-    request_id: ContextField[str] = context.get(str)
+    request_id: ContextField[str] = ContextField(str)
 
     @provider(scope=Scope.APP)
     def provide_db_config(self) -> DatabaseConfig:
@@ -195,9 +194,9 @@ class AdvancedContainer(Container):
     ) -> AsyncUserService:
         return AsyncUserService(db)
 
-    # Transient providers
-    user_repository_transient: object = transient(UserRepository)
-    user_cache_transient: object = transient(UserCache)
+    # Declarative providers (default REQUEST scope)
+    user_repository_transient: object = provider(UserRepository)
+    user_cache_transient: object = provider(UserCache)
 
 
 # Initialize container
@@ -254,7 +253,8 @@ async def main():
     print("Spritze Advanced Example\n")
 
     # Set context
-    container.context.update(request_id="req-123")
+    ctx = get_context()
+    ctx.set(request_id="req-123")
 
     print("1. Sync dependency injection with context managers:")
     result1 = get_user_sync(42)
@@ -270,7 +270,7 @@ async def main():
 
     print("4. Multiple requests (demonstrating scoping):")
     for i in range(3):
-        container.context.update(request_id=f"req-{i}")
+        ctx.set(request_id=f"req-{i}")
         result = get_user_sync(100 + i)
         print(f"Request {i}: {result}")
 

@@ -7,69 +7,23 @@ from contextlib import (
     AbstractContextManager,
     AsyncExitStack,
     ExitStack,
+    suppress,
 )
 from contextvars import ContextVar
 from functools import wraps
 from types import MappingProxyType
-from typing import (
-    ParamSpec,
-    TypeVar,
-    cast,
-    get_args,
-    get_origin,
-    get_type_hints,
-)
+from typing import ParamSpec, TypeVar, cast, get_args, get_origin, get_type_hints
 
-from spritze.entities.provider import Provider
-from spritze.entities.transient import Transient
-from spritze.infrastructure.context import ContextField
-from spritze.infrastructure.exceptions import (
-    CyclicDependency,
-    DependencyNotFound,
-    InvalidProvider,
-)
-from spritze.services.resolution_service import ResolutionService
-from spritze.value_objects.dependency_marker import DependsMarker
-from spritze.value_objects.provider_type import ProviderType
-from spritze.value_objects.scope import Scope
+from spritze.api.provider_descriptor import ProviderDescriptor
+from spritze.core.provider import Provider
+from spritze.core.resolution import ResolutionService
+from spritze.exceptions import CyclicDependency, DependencyNotFound, InvalidProvider
+from spritze.types import DependencyMarker, ProviderType, Scope
 
 T = TypeVar("T")
 P = ParamSpec("P")
 R = TypeVar("R")
 TypeMap = dict[str, type[object]]
-
-
-class _BoundContext:
-    __slots__: tuple[str, ...] = ("_container", "_declared_cache")
-
-    def __init__(self, container: "Container") -> None:
-        self._container: Container = container
-        self._declared_cache: TypeMap | None = None
-
-    def _get_declared_types(self) -> TypeMap:
-        if self._declared_cache is None:
-            declared: TypeMap = {}
-            class_attrs: MappingProxyType[str, object] = vars(self._container.__class__)
-            for name, attr in class_attrs.items():
-                if isinstance(attr, ContextField):
-                    cf = cast("ContextField[object]", attr)
-                    declared[name] = cf.ctx_type
-                    declared[cf.ctx_type.__name__] = cf.ctx_type
-            self._declared_cache = declared
-        return self._declared_cache
-
-    def update(self, **kwargs: object) -> None:
-        declared = self._get_declared_types()
-
-        for key, value in kwargs.items():
-            t = declared.get(key)
-            if t is None:
-                vt = type(value)
-                if vt.__name__ in declared:
-                    t = declared[vt.__name__]
-            if t is None:
-                raise InvalidProvider(f"Unknown context key: {key}")
-            self._container.set_context_value(t, value)
 
 
 class Container:
@@ -92,10 +46,6 @@ class Container:
 
         self._register_providers()
 
-    @property
-    def context(self) -> _BoundContext:
-        return _BoundContext(self)
-
     def get_context_value(self, t: type[object]) -> object | None:
         return self._context_values.get(t)
 
@@ -104,7 +54,7 @@ class Container:
 
     def _register_providers(self) -> None:
         self._register_function_providers()
-        self._register_transient_providers()
+        self._register_descriptor_providers()
 
     def _register_function_providers(self) -> None:
         for name, func_obj in inspect.getmembers(
@@ -151,14 +101,19 @@ class Container:
 
         return None
 
-    def _register_transient_providers(self) -> None:
+    def _register_descriptor_providers(self) -> None:
         class_vars: MappingProxyType[str, object] = vars(self.__class__)
         for _name, attr in class_vars.items():
-            if isinstance(attr, Transient):
-                self._register_single_transient_provider(attr)
+            if isinstance(attr, ProviderDescriptor):
+                self._register_single_descriptor_provider(attr)
 
-    def _register_single_transient_provider(self, transient_attr: Transient) -> None:
-        target = transient_attr.target
+    def _register_single_descriptor_provider(
+        self, descriptor_attr: ProviderDescriptor
+    ) -> None:
+        target = descriptor_attr.target
+        provides = descriptor_attr.provides or target
+        scope = descriptor_attr.scope
+
         ann_map_ctor = cast(
             "dict[str, object]",
             get_type_hints(target.__init__, include_extras=False),
@@ -176,9 +131,9 @@ class Container:
         func_annotations["return"] = target
         ctor_provider.__annotations__ = func_annotations
 
-        self._providers[target] = Provider(
+        self._providers[provides] = Provider(
             func=cast("Callable[..., object]", ctor_provider),
-            scope=Scope.REQUEST,
+            scope=scope,
             return_type=target,
         )
 
@@ -320,7 +275,7 @@ class Container:
             def _inject_dependencies_sync(bound: inspect.BoundArguments) -> None:
                 for name, t in deps.items():
                     needs_inject = name not in bound.arguments or isinstance(
-                        bound.arguments.get(name), DependsMarker
+                        bound.arguments.get(name), DependencyMarker
                     )
                     if needs_inject:
                         bound.arguments[name] = self.resolve(t)
@@ -328,7 +283,7 @@ class Container:
             async def _inject_dependencies_async(bound: inspect.BoundArguments) -> None:
                 for name, t in deps.items():
                     needs_inject = name not in bound.arguments or isinstance(
-                        bound.arguments.get(name), DependsMarker
+                        bound.arguments.get(name), DependencyMarker
                     )
                     if needs_inject:
                         bound.arguments[name] = await self.resolve_async(t)
@@ -350,8 +305,6 @@ class Container:
                             self._async_exit_stack.reset(token_s)
                             self._request_scoped_instances.reset(token_c)
 
-                from contextlib import suppress
-
                 with suppress(AttributeError, TypeError):
                     setattr(_awrapper, "__signature__", sig.replace(parameters=()))
                 return cast("Callable[..., R]", _awrapper)
@@ -371,8 +324,6 @@ class Container:
                             self._sync_exit_stack.reset(token_s)
                             self._request_scoped_instances.reset(token_c)
 
-                from contextlib import suppress
-
                 with suppress(AttributeError, TypeError):
                     setattr(_swrapper, "__signature__", sig.replace(parameters=()))
                 return cast("Callable[..., R]", _swrapper)
@@ -380,4 +331,4 @@ class Container:
         return cast("Callable[[Callable[P, R]], Callable[..., R]]", decorator)
 
 
-__all__ = ["Container", "Scope", "Transient", "Provider"]
+__all__ = ["Container", "Scope", "Provider"]

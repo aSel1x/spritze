@@ -9,29 +9,20 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# Core components
-from .application.decorators import provider, singleton, transient
-from .application.global_container import init, inject
-from .entities.transient import Transient
-from .infrastructure.context import ContextField, context
-from .repositories.container_repository import Container
-from .value_objects.dependency_marker import DependencyMarker, Depends
-from .value_objects.scope import Scope
+from spritze.api.decorators import provider
+from spritze.api.injection import get_context, init, inject
+from spritze.context import ContextField
+from spritze.core.container import Container
+from spritze.types import DependencyMarker, Depends, Scope
 
 __all__ = [
-    # Core
     "Container",
     "Scope",
-    "Transient",
     "Depends",
     "DependencyMarker",
-    # Decorators
     "provider",
-    "singleton",
-    "transient",
     "inject",
     "init",
-    # Context
-    "context",
+    "get_context",
     "ContextField",
 ]

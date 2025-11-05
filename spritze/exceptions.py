@@ -9,10 +9,8 @@ class DependencyNotFound(SpritzeError):
     dependency_type: type[object]
 
     def __init__(self, dependency_type: type[object]) -> None:
-        super().__init__(
-            f"Dependency of type '{dependency_type.__name__}' not found. "
-            + "Make sure it's registered as a provider or transient dependency."
-        )
+        msg = f"Dependency '{dependency_type.__name__}' not found. Ensure it's registered as a provider."
+        super().__init__(msg)
         self.dependency_type = dependency_type
 
 
@@ -26,19 +24,14 @@ class CyclicDependency(SpritzeError):
 
     def __init__(self, stack: tuple[type[object], ...]) -> None:
         path = " -> ".join(t.__name__ for t in stack)
-        super().__init__(
-            f"Cyclic dependency detected: {path}. "
-            + "Review your dependency graph to break the cycle."
-        )
+        super().__init__(f"Cyclic dependency: {path}")
         self.stack = stack
 
 
 class AsyncSyncMismatch(SpritzeError):
     def __init__(self, dependency_type: type[object], context: str) -> None:
-        super().__init__(
-            f"Cannot resolve async provider for '{dependency_type.__name__}' "
-            + f"in {context} context. Use resolve_async() for async dependencies."
-        )
+        msg = f"Cannot resolve async provider '{dependency_type.__name__}' in {context} context."
+        super().__init__(msg)
 
 
 __all__ = [

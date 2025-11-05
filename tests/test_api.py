@@ -2,9 +2,9 @@ from typing import Annotated
 
 import pytest
 
-from spritze import Container, Depends, init, inject, singleton, transient
-from spritze.infrastructure.context import ContextField, context
-from spritze.infrastructure.exceptions import InvalidProvider
+from spritze import Container, Depends, Scope, init, inject, provider
+from spritze.context import ContextField
+from spritze.exceptions import InvalidProvider
 
 
 class Config:
@@ -27,21 +27,20 @@ class AsyncSession:
 
 
 class AppContainer(Container):
-    config: ContextField[Config] = context.get(Config)
+    config: ContextField[Config] = ContextField(Config)
 
-    @singleton
+    @provider(scope=Scope.APP)
     async def db_engine(self, config: Config) -> EngineProtocol:
         return AsyncEngine(config.db_dsn)
 
-    async_session: object = transient(AsyncSession)
+    async_session: object = provider(AsyncSession)
 
 
 @pytest.mark.asyncio
 async def test_integration_async():
     container = AppContainer()
-    container.context.update(Config=Config(db_dsn="memory"))
 
-    init(container)
+    init(container, context={Config: Config(db_dsn="memory")})
 
     @inject
     async def handler(
@@ -57,9 +56,8 @@ async def test_integration_async():
 
 def test_sync_inject_rejects_async_provider():
     container = AppContainer()
-    container.context.update(Config=Config())
 
-    init(container)
+    init(container, context={Config: Config()})
 
     @inject
     def f(e: Annotated[EngineProtocol, Depends()]) -> None:

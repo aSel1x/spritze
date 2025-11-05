@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, TypeVar, cast, get_args, get_type_hints
 
+from spritze.types import DependencyMarker, Depends
+
 if TYPE_CHECKING:
     import inspect
     from collections.abc import Callable
@@ -40,10 +42,8 @@ class ResolutionService:
     def _extract_dependency_type(
         param: inspect.Parameter, ann_obj: object | None
     ) -> type[object] | None:
-        from spritze.value_objects.dependency_marker import Depends, DependsMarker
-
-        if isinstance(cast("object", param.default), DependsMarker):
-            dm_def = cast("DependsMarker[object]", param.default)
+        if isinstance(cast("object", param.default), DependencyMarker):
+            dm_def = cast("DependencyMarker[object]", param.default)
             if isinstance(ann_obj, type):
                 return ann_obj
             if isinstance(dm_def.dependency_type, type):
@@ -59,10 +59,10 @@ class ResolutionService:
         if args_tuple and len(args_tuple) >= 2:
             base = args_tuple[0]
             meta = args_tuple[1:]
-            dep_markers: list[DependsMarker[object]] = [
-                cast("DependsMarker[object]", m)
+            dep_markers: list[DependencyMarker[object]] = [
+                cast("DependencyMarker[object]", m)
                 for m in meta
-                if isinstance(m, DependsMarker)
+                if isinstance(m, DependencyMarker)
             ]
             if dep_markers:
                 dm = dep_markers[0]
