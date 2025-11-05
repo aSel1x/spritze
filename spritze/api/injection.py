@@ -103,22 +103,26 @@ def inject(func: Callable[P, R]) -> Callable[..., R]:
             _injected = _get_container().inject(func)
         return _injected
 
-    if inspect.iscoroutinefunction(func):
+    original_func: Callable[..., object] = func
+    while hasattr(original_func, "__wrapped__"):
+        wrapped = cast(Callable[..., object], getattr(original_func, "__wrapped__"))
+        original_func = wrapped
+
+    if inspect.iscoroutinefunction(original_func):
 
         @wraps(func)
-        async def _async_wrapper(*args: object, **kwargs: object) -> R:
-            injected = _get_injected()
-            result = injected(*args, **kwargs)
+        async def async_wrapper(*args: object, **kwargs: object) -> R:
+            injected_func = _get_injected()
+            result = injected_func(*args, **kwargs)
             return await cast(Awaitable[R], result)
 
-        return cast(Callable[..., R], _async_wrapper)
-    else:
+        return cast(Callable[..., R], async_wrapper)
 
-        @wraps(func)
-        def _sync_wrapper(*args: object, **kwargs: object) -> R:
-            return _get_injected()(*args, **kwargs)
+    @wraps(func)
+    def wrapper(*args: object, **kwargs: object) -> R:
+        return _get_injected()(*args, **kwargs)
 
-        return _sync_wrapper
+    return wrapper
 
 
 class _GlobalContext:

@@ -21,7 +21,7 @@ def provider(
 
 @overload
 def provider(
-    *, scope: Scope = Scope.REQUEST
+    *, provides: type[object] | None = None, scope: Scope = Scope.REQUEST
 ) -> Callable[[Callable[P, R]], Callable[P, R]]: ...
 
 
@@ -46,7 +46,7 @@ def provider(
         return ProviderDescriptor(target, provides=provides, scope=scope)
 
     def decorator(func: Callable[P, R]) -> Callable[P, R]:
-        setattr(func, PROVIDER_TAG, {"scope": scope})
+        setattr(func, PROVIDER_TAG, {"provides": provides, "scope": scope})
         return func
 
     return decorator

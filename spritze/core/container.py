@@ -78,8 +78,11 @@ class Container:
                 "Provider must declare a concrete return type annotation"
             )
 
+        provides_val = meta.get("provides")
+        provides_type = provides_val if isinstance(provides_val, type) else ret_type
+
         bound_method = cast("Callable[..., object]", getattr(self, name))
-        self._providers[ret_type] = Provider(
+        self._providers[provides_type] = Provider(
             func=bound_method, scope=scope_val, return_type=ret_type
         )
 
