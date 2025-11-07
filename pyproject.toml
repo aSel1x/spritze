@@ -1,6 +1,6 @@
 [project]
 name = "spritze"
-version = "0.3.5"
+version = "0.3.6"
 description = "A modern, type-safe Dependency Injection framework for Python with support for async/await and context managers."
 readme = "README.md"
 requires-python = ">=3.12"

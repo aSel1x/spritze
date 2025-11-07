@@ -8,8 +8,6 @@ T = TypeVar("T")
 
 
 class GenericService(Generic[T]):
-    """Generic service for testing."""
-
     value: T
 
     def __init__(self, value: T) -> None:
@@ -17,8 +15,6 @@ class GenericService(Generic[T]):
 
 
 class StringService:
-    """Non-generic service."""
-
     data: str
 
     def __init__(self) -> None:
@@ -26,25 +22,20 @@ class StringService:
 
 
 class MyContainer(Container):
-    """Container with generic providers."""
-
     @provider(scope=Scope.APP)
     def string_data(self) -> StringService:
         return StringService()
 
     @provider(scope=Scope.APP)
     def generic_string(self) -> GenericService[str]:
-        """Provider returning generic type with str parameter."""
         return GenericService("hello")
 
     @provider(scope=Scope.APP)
     def generic_int(self) -> GenericService[int]:
-        """Provider returning generic type with int parameter."""
         return GenericService(42)
 
 
 def test_generic_provider_direct_access() -> None:
-    """Test that generic types work in provider return annotations."""
     container = MyContainer()
 
     string_svc = container.generic_string()
@@ -57,7 +48,6 @@ def test_generic_provider_direct_access() -> None:
 
 
 def test_generic_provider_with_resolve() -> None:
-    """Test that generic types work with resolve()."""
     container = MyContainer()
     init(container)
 
@@ -73,7 +63,6 @@ def test_generic_provider_with_resolve() -> None:
 
 
 def test_generic_provider_with_inject() -> None:
-    """Test that generic types work with inject decorator."""
     container = MyContainer()
     init(container)
 
@@ -89,7 +78,6 @@ def test_generic_provider_with_inject() -> None:
 
 
 def test_non_generic_still_works() -> None:
-    """Ensure non-generic types still work correctly."""
     container = MyContainer()
     init(container)
 

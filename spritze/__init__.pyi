@@ -75,10 +75,18 @@ def provider(
 def provider(
     *,
     scope: Scope | str = ...,
+    provides: type[object] | None = None,
 ) -> Callable[[Callable[P, R]], Callable[P, R]]: ...
 @overload
 def provider(
     target: type[T],
+    *,
+    provides: type[object] | None = None,
+    scope: Scope | str = ...,
+) -> ProviderDescriptor: ...
+@overload
+def provider(
+    target: Callable[..., R],
     *,
     provides: type[object] | None = None,
     scope: Scope | str = ...,

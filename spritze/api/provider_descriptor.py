@@ -1,3 +1,4 @@
+from collections.abc import Callable
 from typing import TypeVar
 
 from spritze.types import Scope
@@ -10,13 +11,13 @@ class ProviderDescriptor:
 
     def __init__(
         self,
-        target: type[object],
+        target: type[object] | Callable[..., object],
         *,
         provides: type[object] | None = None,
         scope: Scope = Scope.REQUEST,
     ) -> None:
-        self.target: type[object] = target
-        self.provides: type[object] = provides if provides is not None else target
+        self.target: type[object] | Callable[..., object] = target
+        self.provides: type[object] | None = provides
         self.scope: Scope = scope
         self.attr_name: str | None = None
 
@@ -28,7 +29,11 @@ class ProviderDescriptor:
         instance: _C | None,
         owner: type[_C],
     ) -> type[object]:
-        return self.provides
+        if self.provides is not None:
+            return self.provides
+        if isinstance(self.target, type):
+            return self.target
+        return object
 
 
 __all__ = ["ProviderDescriptor"]

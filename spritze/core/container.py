@@ -118,8 +118,25 @@ class Container:
         self, descriptor_attr: ProviderDescriptor
     ) -> None:
         target = descriptor_attr.target
-        provides = descriptor_attr.provides or target
+        provides = descriptor_attr.provides
         scope = descriptor_attr.scope
+
+        if not isinstance(target, type):
+            ret_type = self._extract_return_type(target)
+            if ret_type is None:
+                raise InvalidProvider(
+                    "Function provider must declare a concrete return type annotation"
+                )
+            provides_type = provides if provides is not None else ret_type
+
+            self._providers[provides_type] = Provider(
+                func=target,
+                scope=scope,
+                return_type=ret_type,
+            )
+            return
+
+        provides_type = provides if provides is not None else target
 
         ann_map_ctor = cast(
             "dict[str, object]",
@@ -138,7 +155,7 @@ class Container:
         func_annotations["return"] = target
         ctor_provider.__annotations__ = func_annotations
 
-        self._providers[provides] = Provider(
+        self._providers[provides_type] = Provider(
             func=cast("Callable[..., object]", ctor_provider),
             scope=scope,
             return_type=target,

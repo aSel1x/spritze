@@ -6,13 +6,23 @@ from spritze.types import Scope
 
 P = ParamSpec("P")
 R = TypeVar("R")
+T = TypeVar("T")
 
 PROVIDER_TAG: Final[str] = "__spritze_provider__"
 
 
 @overload
 def provider(
-    target: type[object],
+    target: type[T],
+    *,
+    provides: type[object] | None = None,
+    scope: Scope = Scope.REQUEST,
+) -> ProviderDescriptor: ...
+
+
+@overload
+def provider(
+    target: Callable[..., R],
     *,
     provides: type[object] | None = None,
     scope: Scope = Scope.REQUEST,
@@ -26,7 +36,7 @@ def provider(
 
 
 def provider(
-    target: type[object] | None = None,
+    target: type[T] | Callable[..., object] | None = None,
     *,
     provides: type[object] | None = None,
     scope: Scope = Scope.REQUEST,
@@ -41,6 +51,10 @@ def provider(
     Mode 2 - Declarative for classes:
         my_service = provider(Service, scope=Scope.APP)
         my_service = provider(ServiceImpl, provides=ServiceInterface, scope=Scope.APP)
+
+    Mode 3 - Declarative for functions:
+        my_service = provider(build_service, scope=Scope.APP)
+        my_service = provider(build_service, provides=ServiceInterface, scope=Scope.APP)
     """
     if target is not None:
         return ProviderDescriptor(target, provides=provides, scope=scope)
