@@ -112,6 +112,12 @@ def get_function_dependencies(
         if name == "self":
             continue
 
+        if param.kind in (
+            inspect.Parameter.VAR_POSITIONAL,
+            inspect.Parameter.VAR_KEYWORD,
+        ):
+            continue
+
         if param.default is not inspect.Parameter.empty:  # pyright: ignore[reportAny]
             continue
 
