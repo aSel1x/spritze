@@ -61,8 +61,7 @@ class AppContainer(Container):
         return MainService(settings, resource)
 
 
-container = AppContainer()
-init(container)
+init(AppContainer)
 
 # In a typical Django app, you'd have `app_name` and named URL patterns.
 app_name: str = "example"

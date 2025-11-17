@@ -63,8 +63,7 @@ class AppContainer(Container):
 
 
 # Initialize container
-container = AppContainer()
-init(container)
+init(AppContainer)
 
 # Flask application
 app = Flask(__name__)

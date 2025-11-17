@@ -9,7 +9,7 @@ A modern, type-safe Dependency Injection framework for Python with support for a
 
 ## Features
 
-- **Type Safety**: Full support for Python 3.11+ type hints with `Annotated` and `Depends`
+- **Type Safety**: Full support for Python 3.12+ type hints with `Annotated` and `Depends`
 - **Scopes**: APP (singleton) and REQUEST (per-request) scoping
 - **Async Support**: Native async/await support for providers and injection
 - **Context Managers**: Automatic lifecycle management with generators and async generators
