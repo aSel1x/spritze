@@ -9,22 +9,20 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from spritze.api.decorators import provider
-from spritze.api.injection import aresolve, get_context, init, inject, resolve
-from spritze.context import ContextField
-from spritze.core.container import Container
-from spritze.types import DependencyMarker, Depends, Scope
 
-__all__ = [
+from spritze.api.core import aresolve, init, resolve
+from spritze.api.injection import inject
+from spritze.api.provider import provider
+from spritze.core.container import Container
+from spritze.types import Depends, Scope
+
+__all__ = (
     "Container",
     "Scope",
     "Depends",
-    "DependencyMarker",
     "provider",
     "inject",
     "resolve",
     "aresolve",
     "init",
-    "get_context",
-    "ContextField",
-]
+)

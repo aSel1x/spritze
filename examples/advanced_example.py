@@ -2,18 +2,17 @@
 
 import asyncio
 from collections.abc import AsyncGenerator, Generator
-from contextlib import contextmanager
 from typing import Annotated
 
 from spritze import (
     Container,
-    ContextField,
     Depends,
     Scope,
-    get_context,
+    aresolve,
     init,
     inject,
     provider,
+    resolve,
 )
 
 
@@ -136,9 +135,6 @@ class AsyncUserService:
 
 # Container with all features
 class AdvancedContainer(Container):
-    # Context fields
-    request_id: ContextField[str] = ContextField(str)
-
     @provider(scope=Scope.APP)
     def provide_db_config(self) -> DatabaseConfig:
         return DatabaseConfig("postgresql://localhost/prod_db", pool_size=20)
@@ -194,14 +190,13 @@ class AdvancedContainer(Container):
     ) -> AsyncUserService:
         return AsyncUserService(db)
 
-    # Declarative providers (default REQUEST scope)
-    user_repository_transient: object = provider(UserRepository)
-    user_cache_transient: object = provider(UserCache)
+    # Declarative providers (default APP scope)
+    user_repository_transient: object = provider(UserRepository, scope=Scope.TRANSIENT)
+    user_cache_transient: object = provider(UserCache, scope=Scope.TRANSIENT)
 
 
 # Initialize container
-container = AdvancedContainer()
-init(container)
+init(AdvancedContainer)
 
 
 # Sync handlers
@@ -209,9 +204,8 @@ init(container)
 def get_user_sync(
     user_id: int,
     service: Annotated[UserService, Depends()],
-    request_id: Annotated[str, Depends()],
 ) -> dict[str, object]:
-    print(f"Processing request {request_id}")
+    print(f"Processing request for user {user_id}")
     return service.get_user(user_id)
 
 
@@ -237,24 +231,9 @@ async def get_user_async(
     return await service.get_user(user_id)
 
 
-# Context manager example
-@contextmanager
-def request_context(request_id: str):
-    """Context manager for request-scoped operations."""
-    print(f"Starting request {request_id}")
-    try:
-        yield
-    finally:
-        print(f"Finishing request {request_id}")
-
-
 async def main():
     """Demonstrate all features."""
     print("Spritze Advanced Example\n")
-
-    # Set context
-    ctx = get_context()
-    ctx.set(request_id="req-123")
 
     print("1. Sync dependency injection with context managers:")
     result1 = get_user_sync(42)
@@ -268,9 +247,18 @@ async def main():
     result3 = await get_user_async(42)
     print(f"Result: {result3}\n")
 
-    print("4. Multiple requests (demonstrating scoping):")
+    print("4. Direct resolution:")
+    service = resolve(UserService)
+    result4 = service.get_user(99)
+    print(f"Result: {result4}\n")
+
+    print("5. Async direct resolution:")
+    async_service = await aresolve(AsyncUserService)
+    result5 = await async_service.get_user(99)
+    print(f"Result: {result5}\n")
+
+    print("6. Multiple requests (demonstrating scoping):")
     for i in range(3):
-        ctx.set(request_id=f"req-{i}")
         result = get_user_sync(100 + i)
         print(f"Request {i}: {result}")
 

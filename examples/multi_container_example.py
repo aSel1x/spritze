@@ -27,8 +27,8 @@ class AdminContainer(Container):
         return AdminService()
 
 
-# Initialize container
-init(PublicContainer())
+# Initialize with multiple containers
+init(PublicContainer, AdminContainer)
 
 
 @inject
@@ -36,14 +36,11 @@ def public_route(svc: Annotated[PublicService, Depends()]) -> str:
     return f"hello {svc.who()}"
 
 
+@inject
+def admin_route(svc: Annotated[AdminService, Depends()]) -> str:
+    return f"hello {svc.who()}"
+
+
 if __name__ == "__main__":
-    print(public_route())  # hello public
-
-    # Switch to admin container
-    init(AdminContainer())
-
-    @inject
-    def admin_route(svc: Annotated[AdminService, Depends()]) -> str:
-        return f"hello {svc.who()}"
-
-    print(admin_route())  # hello admin
+    print("Public route:", public_route())  # hello public
+    print("Admin route:", admin_route())  # hello admin

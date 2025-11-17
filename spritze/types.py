@@ -1,9 +1,13 @@
 """Type definitions for dependency injection."""
 
-from __future__ import annotations
-
 from enum import Enum, auto
-from typing import TYPE_CHECKING, Annotated, Generic, TypeVar, override
+from typing import TypeVar
+
+__all__ = (
+    "Scope",
+    "ProviderType",
+    "Depends",
+)
 
 T = TypeVar("T")
 
@@ -11,52 +15,26 @@ T = TypeVar("T")
 class Scope(Enum):
     APP = auto()
     REQUEST = auto()
+    TRANSIENT = auto()
 
 
 class ProviderType(Enum):
-    SIMPLE = auto()
+    SYNC = auto()
     ASYNC = auto()
-    GEN = auto()
+    SYNC_GEN = auto()
     ASYNC_GEN = auto()
 
 
-class DependencyMarker(Generic[T]):
+class Depends:
+    """Marker for dependency injection using Annotated type hints.
+
+    Can be used as:
+    - Depends[Type] in Annotated hints
+    - Depends() as default parameter value
+    """
+
     def __init__(self, dependency_type: type[T] | None = None) -> None:
-        self.dependency_type: type[T] | None = dependency_type
+        self.dependency_type: type | None = dependency_type
 
-
-if TYPE_CHECKING:
-
-    class _DependsMeta(type):
-        def __class_getitem__(
-            cls,
-            item: type[T],
-        ) -> Annotated[type[T], DependencyMarker[T]]: ...
-
-        @override
-        def __call__(
-            cls,
-            dependency_type: type[T] | None = None,
-        ) -> DependencyMarker[T]: ...
-
-else:
-
-    class _DependsMeta(type):
-        def __class_getitem__(
-            cls,
-            item: type[T],
-        ) -> type[T]:
-            return item
-
-        def __call__(
-            cls,
-            dependency_type: type[T] | None = None,
-        ) -> DependencyMarker[T]:
-            return DependencyMarker(dependency_type)
-
-
-class Depends(Generic[T], metaclass=_DependsMeta):
-    pass
-
-
-__all__ = ["Scope", "ProviderType", "DependencyMarker", "Depends"]
+    def __class_getitem__(cls, item: type[T]) -> type[T]:
+        return item

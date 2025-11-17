@@ -35,8 +35,7 @@ class AppContainer(Container):
 
 
 # Initialize container
-container = AppContainer()
-init(container)
+init(AppContainer)
 
 
 # Litestar application
